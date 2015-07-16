@@ -30,12 +30,14 @@
 
 var singleSourceURL = "http://localhost:8080/route-planner/planner/SingleSource?";
 var singleSourceSingleDestURL = "http://localhost:8080/route-planner/planner/SingleSourceSingleDest?";
+var singleSourceSingleDestSingleWptURL = "http://localhost:8080/route-planner/planner/SingleSourceSingleDestSingleWpt?";
 
 var map = null;
 var current_location = new google.maps.LatLng(37.379715,-121.997060);
 
 var originMarker = null;
 var destinationMarker = null;
+var waypointMarker = null;
 var currentMarker = null;
 
 var direct_route = null;
@@ -61,7 +63,8 @@ var currentDestination = null;
 
 var durationLimit = 30;
 var distanceLimit = 30;
-var queryType = 1; // 1 for single source; 2 for single source single destination
+var offsetCoef = 1;
+var queryType = 1; // 1 for single source; 2 for single source single destination; 3 for single source single destination single waypoint
 
 function initialize() {
 
@@ -110,6 +113,29 @@ function initialize() {
 
             originInfoWindow.close();
             addOriginIndicator(origin.geometry.location, origin.name);
+        }
+
+        refresh();
+    });
+
+    /* Get Waypoint */
+
+    var waypointInput = document.getElementById('waypointInput');
+    var waypoint_autocomplete = new google.maps.places.Autocomplete(waypointInput);
+    var waypointInfoWindow = new google.maps.InfoWindow();
+    waypoint_autocomplete.bindTo('bounds', map);
+    
+    google.maps.event.addListener(waypoint_autocomplete, 'place_changed', function() {
+
+        /* clear previous markers */
+        clearOverlays();
+        showAllDestinations();
+
+        var waypoint = waypoint_autocomplete.getPlace();
+        if (waypoint.geometry) {
+
+            waypointInfoWindow.close();
+            addWaypointIndicator(waypoint.geometry.location, waypoint.name);
         }
 
         refresh();
@@ -242,21 +268,39 @@ function addOriginIndicator(position, description) {
     });
 
     var bounds = new google.maps.LatLngBounds();
-    bounds.extend(position);
-    for (var key in poiMarkers) {
-        bounds.extend(poiMarkers[key].getPosition());
+    extendBounds(bounds);
+}
+
+function addWaypointIndicator(position, description) {
+
+    if (waypointMarker == null){
+        waypointMarker = new google.maps.Marker({
+            map: map,
+            icon: 'http://maps.google.com/mapfiles/ms/icons/purple-dot.png',
+            title: description,
+            position: position
+        });
+    } else {
+        waypointMarker.setTitle(description);
+        waypointMarker.setPosition(position);
+        waypointMarker.setMap(map);
     }
 
-    if (destinationMarker != null){
-		bounds.extend(destinationMarker.getPosition());
-	}
+    var htmlContent = '<div id="container">' +
+        '<div style="float:center;">' + waypointMarker.getTitle() +
+        '</div>' +
+        '</div>';
 
-    map.fitBounds(bounds);
+    waypointInfoWindow = new google.maps.InfoWindow({
+        content: htmlContent,
+    });
 
-    if (map.getZoom() > 15) {
-        map.setZoom(15);
-    }
+    google.maps.event.addListener(waypointMarker, 'click', function() {
+        waypointInfoWindow.open(map, waypointMarker);
+    });
 
+    var bounds = new google.maps.LatLngBounds();
+    extendBounds(bounds);
 }
 
 function addDestinationIndicator(position, description) {
@@ -288,13 +332,26 @@ function addDestinationIndicator(position, description) {
     });
 
     var bounds = new google.maps.LatLngBounds();
-    bounds.extend(position);
+    extendBounds(bounds);
+
+}
+
+function extendBounds(bounds){
+
     for (var key in poiMarkers) {
         bounds.extend(poiMarkers[key].getPosition());
     }
 
     if (originMarker != null){
-    	bounds.extend(originMarker.getPosition());
+        bounds.extend(originMarker.getPosition());
+    }
+
+    if (waypointMarker != null){
+        bounds.extend(waypointMarker.getPosition());
+    }
+
+    if (destinationMarker != null){
+        bounds.extend(destinationMarker.getPosition());
     }
 
     map.fitBounds(bounds);
@@ -302,7 +359,6 @@ function addDestinationIndicator(position, description) {
     if (map.getZoom() > 15) {
         map.setZoom(15);
     }
-
 }
 
 function addPOIIndicator(poi) {
@@ -326,7 +382,9 @@ function refresh(){
 		planSingleSource();
 	} else if (queryType == 2){
 		planSingleSourceSingleDest();
-	}
+	} else if (queryType == 3){
+        planSingleSourceSingleDestSingleWpt();
+    }
 }
 
 function planSingleSource() {
@@ -547,6 +605,131 @@ function querySingleSourceSingleDest(url){
 
 }
 
+function planSingleSourceSingleDestSingleWpt() {
+
+    if (originMarker != null && destinationMarker != null && waypointMarker != null) {
+
+        if (!isEmpty(poiMarkers)) {
+
+            options["origin"] = originMarker.getPosition().lat()+","+originMarker.getPosition().lng();
+            options["waypoint"] = waypointMarker.getPosition().lat()+","+waypointMarker.getPosition().lng();
+            options["destination"] = destinationMarker.getPosition().lat()+","+destinationMarker.getPosition().lng();
+
+            var poiDescription = [];
+
+            for (var key in poiMarkers) {
+                if (poiDescription.length == 0) {
+                    poiDescription.push(poiMarkers[key].getPosition().toUrlValue());
+                } else {
+                    poiDescription.push("," + poiMarkers[key].getPosition().toUrlValue());
+                }
+            }
+
+            options["pois"] = poiDescription.join("");
+
+            var url = [];
+            url.push(singleSourceSingleDestSingleWptURL);
+
+            for (var key in options) {
+                var value = options[key];
+                if (value != null && value != undefined) {
+                    url.push(key + "=" + value + "&");
+                }
+            }
+            console.log(url.join(""));
+
+            querySingleSourceSingleDestSingleWpt(url);
+
+        } else {
+            /* showWarning("NO VALID DESTINATION HAS BEEN SPECIFIED"); */
+        }
+
+    } else {
+        /* showWarning("NO VALID ORIGIN HAS BEEN SPECIFIED"); */
+    }
+}
+
+function querySingleSourceSingleDestSingleWpt(url){
+
+    busy();
+
+    $.getJSON(url.join(""), function(data) {
+
+        console.log(data);
+
+        clearOverlays();
+
+        poiRoutes = {};
+        poiPolylines = {};
+
+        var routes = data.routes;
+
+        /* Iterate over each route */
+        if (routes != undefined) {
+
+            direct_route = data.DirectRoute;
+            var direct_route_name = direct_route.POILat + "," + direct_route.POILon;
+            var direct_route_details = direct_route.Route;
+            direct_route_duration = direct_route_details.duration;
+            direct_route_cost = direct_route_details.cost;
+            direct_route_distance = direct_route_details.distance;
+
+            var direct_route_path = extractRoutePath(direct_route_details.polyline);
+
+            var direct_route_polyline = new google.maps.Polyline({
+                path: direct_route_path,
+                strokeColor: "#0000FF",
+                strokeOpacity: 0.6,
+                strokeWeight: 3
+            });
+
+            poiRoutes[direct_route_name] = {
+                "Time": direct_route_duration,
+                "Cost": direct_route_cost,
+                "Distance": direct_route_distance
+            };
+            poiPolylines[direct_route_name] = direct_route_polyline;
+
+            for (var i = 0; i < routes.length; i++) {
+
+                var name = routes[i].POILat + "," + routes[i].POILon;
+                var routeDetails = routes[i].Route;
+                var duration = routeDetails.duration;
+                var cost = routeDetails.cost;
+                var distance = routeDetails.distance;
+                var wpt_time = routes[i].WPTTime;
+                var wpt_distance = routes[i].WPTDistance;
+                var infoWindow = poiWindows[name];
+
+                infoWindow.setContent(generatePOIDescription(routes[i]));               
+
+                var path = extractRoutePath(routeDetails.polyline);
+
+                var polyline = new google.maps.Polyline({
+                    path: path,
+                    strokeColor: "#0000FF",
+                    strokeOpacity: 0.6,
+                    strokeWeight: 3
+                });
+
+                poiRoutes[name] = {
+                    "Time": duration,
+                    "Cost": cost,
+                    "Distance": distance,
+                    "WPTTime": wpt_time,
+                    "WPTDistance": wpt_distance
+                };
+                poiPolylines[name] = polyline;
+            }
+        }
+        // hideDestinationInput();
+        showAllDestinations();
+        ready();
+
+    });
+
+}
+
 function clearRouteDisplay() {
     var routesDiv = document.getElementById("routes");
     while (routesDiv.firstChild) {
@@ -602,9 +785,15 @@ function generatePOIDescription(poiRoute){
 
 	htmlContent.push('<br><img src="icons/speed.png" height="12" width="12" style="margin-top:0px;padding-top:0px"> ' + time.toFixed(1) + ' mins / <img src="icons/road.png" height="14" width="14" style="margin:0px;padding:2px">' + distance.toFixed(1) + ' miles');
 	
-	if (queryType == 2 && direct_route_duration != null && direct_route_distance != null){
+	if ((queryType == 2 || queryType == 3) && direct_route_duration != null && direct_route_distance != null){
 		htmlContent.push('<br>DeltaT: ' + (time - direct_route_duration).toFixed(1) + ' mins / DeltaD: ' + (distance - direct_route_distance).toFixed(1) + ' miles');
+
+        if (queryType == 3){
+            htmlContent.push('<br>OffsetT: ' + poiRoute.WPTTime.toFixed(1) + ' mins / OffsetD: ' + poiRoute.WPTDistance.toFixed(1) + ' miles');
+        }
 	}
+
+
 
     htmlContent.push('</div>');
 
@@ -680,23 +869,15 @@ function showPOIMarkers() {
         hideMarker(marker);
 
         // Is the destination takes more time than required?
-        var routes = poiRoutes[key];
+        var route = poiRoutes[key];
 
-        if (routes != null){
-        	if (queryType == 2 && direct_route_duration != null && direct_route_distance != null){
-        		if ((routes.Time - direct_route_duration) > durationLimit || 
-        			(routes.Distance - direct_route_distance) > distanceLimit){
-		            marker.icon = 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png';
-		        } else {
-		            marker.icon = 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png';
-		        }
-        	} else {
-        		if (routes.Time > durationLimit || routes.Distance > distanceLimit){
-		            marker.icon = 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png';
-		        } else {
-		            marker.icon = 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png';
-		        }
-        	}
+        if (route != null){
+
+            if (satisfied(route)){
+                marker.icon = 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png';
+	        } else {
+                marker.icon = 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png';
+	        }
 
         }
 
@@ -715,22 +896,47 @@ function showAllPOIPolylines() {
             polyline.setMap(null);
 
             // Is the destination takes more time than required?
-            var routes = poiRoutes[key];
-        	if (queryType == 2 && direct_route_duration != null && direct_route_distance != null){
-	            if ((routes.Time - direct_route_duration) > durationLimit || 
-        			(routes.Distance - direct_route_distance) > distanceLimit){
-	                polyline.strokeColor = "#727272";
-	            } else {
-	                polyline.strokeColor = "#0000FF";
-	            }
-			} else {
-				if (routes.Time > durationLimit || routes.Distance > distanceLimit){
-	                polyline.strokeColor = "#727272";
-	            } else {
-	                polyline.strokeColor = "#0000FF";
-	            }
-			}
+            var route = poiRoutes[key];
+
+			if (satisfied(route)){
+                polyline.strokeColor = "#0000FF";
+            } else {
+                polyline.strokeColor = "#727272";
+            }
+
             polyline.setMap(map);
+        }
+    }
+}
+
+function satisfied(route){
+
+    if (queryType == 2 && direct_route_duration != null && direct_route_distance != null){
+
+        if ((route.Time - direct_route_duration) > durationLimit || 
+            (route.Distance - direct_route_distance) > distanceLimit){
+            return false;
+        } else {
+            return true;
+        }
+
+    } else if (queryType == 3 && direct_route_duration != null && direct_route_distance != null){
+
+
+
+        if (offsetCoef*(route.Time - direct_route_duration) + (2-offsetCoef)*route.WPTTime > durationLimit || 
+            offsetCoef*(route.Distance - direct_route_distance) + (2-offsetCoef)*route.WPTDistance > distanceLimit){
+            return false;
+        } else {
+            return true;
+        }
+
+    } else {
+
+        if (route.Time > durationLimit || route.Distance > distanceLimit){
+            return false;
+        } else {
+            return true;
         }
     }
 }
@@ -915,6 +1121,20 @@ function convertDistanceInput(input_distance){
     return Math.round(output_distance);
 }
 
+function showOffsetCoef(offset_coef) {
+
+    offsetCoef = convertOffsetCoefInput(offset_coef);
+    document.getElementById("offsetCoefDisplay").innerHTML = offsetCoef.toFixed(2);
+    triggerGraphUpdate();
+}
+
+function convertOffsetCoefInput(input_offset){
+
+    var output_offset = 0;
+    output_offset = input_offset/300*2;
+    return output_offset;
+}
+
 function triggerGraphUpdate(){
 
     if (state == 1){
@@ -1005,7 +1225,11 @@ function setTypeNear(){
 	
     document.getElementById("btn-near").className = "btn btn-warning";
     document.getElementById("btn-between").className = "btn btn-default";
+    document.getElementById("btn-betweenplus").className = "btn btn-default";
+    document.getElementById("waypointInput").style.display = 'none';
     document.getElementById("destinationInput").style.display = 'none';
+    document.getElementById("offsetDisplayContainer").style.display = 'none';
+    document.getElementById("offsetSliderContainer").style.display = 'none';
     document.getElementById("timeConstraintTitle").innerHTML= "WITHIN ";
     document.getElementById("distanceConstraintTitle").innerHTML= "WITHIN ";
 
@@ -1019,12 +1243,34 @@ function setTypeBetween(){
 	
     document.getElementById("btn-near").className = "btn btn-default";
     document.getElementById("btn-between").className = "btn btn-warning";
+    document.getElementById("btn-betweenplus").className = "btn btn-default";
+    document.getElementById("waypointInput").style.display = 'none';
     document.getElementById("destinationInput").style.display = 'table-cell';
+    document.getElementById("offsetDisplayContainer").style.display = 'none';
+    document.getElementById("offsetSliderContainer").style.display = 'none';
     document.getElementById("timeConstraintTitle").innerHTML= "MAX. DELTA ";
     document.getElementById("distanceConstraintTitle").innerHTML= "MAX. DELTA ";
 
     if (queryType != 2){
         queryType = 2;    
+        refresh();
+    }
+}
+
+function setTypeBetweenPlus(){
+    
+    document.getElementById("btn-near").className = "btn btn-default";
+    document.getElementById("btn-between").className = "btn btn-default";
+    document.getElementById("btn-betweenplus").className = "btn btn-warning";
+    document.getElementById("waypointInput").style.display = 'table-cell';
+    document.getElementById("destinationInput").style.display = 'table-cell';
+    document.getElementById("offsetDisplayContainer").style.display = 'table-row';
+    document.getElementById("offsetSliderContainer").style.display = 'table-row';
+    document.getElementById("timeConstraintTitle").innerHTML= "MAX. DELTA ";
+    document.getElementById("distanceConstraintTitle").innerHTML= "MAX. DELTA ";
+
+    if (queryType != 3){
+        queryType = 3;    
         refresh();
     }
 }
@@ -1063,16 +1309,18 @@ function setModeWalking(){
 
         <div style="width:100%;position:absolute;top:0;left:0;z-index:10;">
 
-            <div id="destinationInputDiv" style="width:100%;max-width:600px;height:60px;margin:0 auto;display:table;background:url('images/white_transparent_background.png');background-size:100% 100%;">
+            <div id="destinationInputDiv" style="width:100%;max-width:700px;height:60px;margin:0 auto;display:table;background:url('images/white_transparent_background.png');background-size:100% 100%;">
 
                 <div style="display:table-row;padding:0px;margin:0px;text-align:center;">
                     <input id="originInput" type="text" class="locationbox" placeholder="Origin">
-                    <input id="poiInput" type="text" class="locationbox" placeholder="POIs">
+                    <input id="waypointInput" type="text" class="locationbox" placeholder="Waypoint">
                     <input id="destinationInput" type="text" class="locationbox" placeholder="Destination">
+                    <input id="poiInput" type="text" class="locationbox" placeholder="POIs">
                 </div>
                 <div style="display:table-row;text-align:center;"> 
         			<button type="button" id="btn-near" class="btn btn-warning" style="margin:5px" onClick="setTypeNear()">"NEAR"</button>
         			<button type="button" id="btn-between" class="btn btn-default" style="margin:5px" onClick="setTypeBetween()">"BETWEEN"</button>
+                    <button type="button" id="btn-betweenplus" class="btn btn-default" style="margin:5px" onClick="setTypeBetweenPlus()">"BETWEEN+"</button>
 					<label><input type="radio" name="optradio" style="margin:5px" checked="checked" onClick="setModeDriving()">Driving</label>
 					<label><input type="radio" name="optradio" style="margin:5px" onClick="setModeBiking()">Biking</label>
 					<label><input type="radio" name="optradio" style="margin:5px" onClick="setModeWalking()">Walking</label>
@@ -1114,6 +1362,16 @@ function setModeWalking(){
             </div>
 
             <div id="constraintInputDiv" style="width:100%;max-width:500px;padding-left:10px;padding-right:10px;padding-top:5px;padding-bottom:10px;margin:0 auto;background:url('images/white_transparent_background.png');background-size:100% 100%;background-repeat:no-repeat;display:table;">
+
+                <div id="offsetDisplayContainer" style="display:table-row">
+                    <span class="number-title" style="float: left;width:33.33333%;text-align:left;">CLOSER POI </span>
+                    <span class="number-display" style="float: left;width:33.33333%;text-align:center;" id="offsetCoefDisplay">1</span>
+                    <span class="number-title" style="float: left;width:33.33333%;text-align:right;"> SHORTER TRIP</span>
+                </div>
+
+                <div id="offsetSliderContainer" style="display:table-row;">
+                    <input id="offsetCoef" type="range" style="width:100%" oninput="showOffsetCoef(this.value)" min="1" max="300" value="150">
+                </div>
 
                 <div style="display:table-row">
                     <span id="timeConstraintTitle" class="number-title">WITHIN </span>

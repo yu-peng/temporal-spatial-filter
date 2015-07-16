@@ -30,6 +30,25 @@ public class Route {
 		instructions.addAll(route2.instructions);
 	}
 	
+	public Route(Route route1, Route route2, Route route3, Route route4){
+		
+		name = route1.name + "->" + route2.name + "->" + route3.name + "->" + route4.name;
+		time = route1.time + route2.time + route3.time + route4.time;
+		distance = route1.distance + route2.distance + route3.distance + route4.distance;
+		cost = route1.cost + route2.cost + route3.cost + route4.cost;
+		
+		polyline = new LinkedList<double[]>(route1.polyline);
+		polyline.addAll(route2.polyline);
+		polyline.addAll(route3.polyline);
+		polyline.addAll(route4.polyline);
+
+		instructions = new LinkedList<String>(route1.instructions);
+		instructions.addAll(route2.instructions);
+		instructions.addAll(route3.instructions);
+		instructions.addAll(route4.instructions);
+
+	}
+	
 	public void setTime(double _time){
 		time = _time;
 	}
