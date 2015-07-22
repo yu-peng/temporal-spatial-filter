@@ -64,6 +64,7 @@ var currentDestination = null;
 var durationLimit = 30;
 var distanceLimit = 30;
 var offsetCoef = 1;
+var northAngleLimit = 90;
 var queryType = 1; // 1 for single source; 2 for single source single destination; 3 for single source single destination single waypoint
 
 function initialize() {
@@ -470,7 +471,9 @@ function querySingleSource(url){
                 poiRoutes[name] = {
                     "Time": duration,
                     "Cost": cost,
-                    "Distance": distance
+                    "Distance": distance,
+                    "DestLat": routes[i].POILat,
+                	"DestLon": routes[i].POILon,
                 };
                 poiPolylines[name] = polyline;
 
@@ -564,7 +567,9 @@ function querySingleSourceSingleDest(url){
             poiRoutes[direct_route_name] = {
                 "Time": direct_route_duration,
                 "Cost": direct_route_cost,
-                "Distance": direct_route_distance
+                "Distance": direct_route_distance,
+                "DestLat": direct_route.POILat,
+                "DestLon": direct_route.POILon,
             };
             poiPolylines[direct_route_name] = direct_route_polyline;
 
@@ -591,7 +596,9 @@ function querySingleSourceSingleDest(url){
                 poiRoutes[name] = {
                     "Time": duration,
                     "Cost": cost,
-                    "Distance": distance
+                    "Distance": distance,
+                    "DestLat": routes[i].POILat,
+                	"DestLon": routes[i].POILon,
                 };
                 poiPolylines[name] = polyline;
 
@@ -686,7 +693,9 @@ function querySingleSourceSingleDestSingleWpt(url){
             poiRoutes[direct_route_name] = {
                 "Time": direct_route_duration,
                 "Cost": direct_route_cost,
-                "Distance": direct_route_distance
+                "Distance": direct_route_distance,
+                "DestLat": direct_route.POILat,
+                "DestLon": direct_route.POILon,
             };
             poiPolylines[direct_route_name] = direct_route_polyline;
 
@@ -717,7 +726,9 @@ function querySingleSourceSingleDestSingleWpt(url){
                     "Cost": cost,
                     "Distance": distance,
                     "WPTTime": wpt_time,
-                    "WPTDistance": wpt_distance
+                    "WPTDistance": wpt_distance,
+                    "DestLat": routes[i].POILat,
+                	"DestLon": routes[i].POILon,
                 };
                 poiPolylines[name] = polyline;
             }
@@ -911,6 +922,25 @@ function showAllPOIPolylines() {
 
 function satisfied(route){
 
+	// check if the angle constraint is satisfied
+	// only apply to near at the moment
+	if (queryType == 1){
+		if (originMarker != null) {
+
+	        var y = Math.sin(route.DestLon-originMarker.getPosition().lng()) * Math.cos(route.DestLat);
+			var x = Math.cos(originMarker.getPosition().lat())*Math.sin(route.DestLat) 
+			- Math.sin(originMarker.getPosition().lat())*Math.cos(route.DestLat)*Math.cos(route.DestLon-originMarker.getPosition().lng());
+			var brng = Math.atan2(y, x) * (180/3.1415926);
+
+			// console.log('Bearing: ' + brng);
+
+			if (Math.abs(brng) > northAngleLimit){
+				return false;
+			}
+
+        }
+	}
+
     if (queryType == 2 && direct_route_duration != null && direct_route_distance != null){
 
         if ((route.Time - direct_route_duration) > durationLimit || 
@@ -1091,50 +1121,6 @@ function attachInfoWindow(marker, map) {
     return infoWindow;
 }
 
-function showDuration(duration) {
-
-    durationLimit = convertDurationInput(duration);
-    document.getElementById("timeConstraintDisplay").innerHTML = durationLimit;
-    triggerGraphUpdate();
-}
-
-function convertDurationInput(input_duration){
-
-    var output_duration = 0;
-    input_duration /= 300;
-    output_duration = (300-1)*Math.pow(input_duration, 2.12372) + 1;
-    return Math.round(output_duration);
-}
-
-function showDistance(distance) {
-
-    distanceLimit = convertDistanceInput(distance);
-    document.getElementById("distanceConstraintDisplay").innerHTML = distanceLimit;
-    triggerGraphUpdate();
-}
-
-function convertDistanceInput(input_distance){
-
-    var output_distance = 0;
-    input_distance /= 300;
-    output_distance = (300-1)*Math.pow(input_distance, 2.12372) + 1;
-    return Math.round(output_distance);
-}
-
-function showOffsetCoef(offset_coef) {
-
-    offsetCoef = convertOffsetCoefInput(offset_coef);
-    document.getElementById("offsetCoefDisplay").innerHTML = offsetCoef.toFixed(2);
-    triggerGraphUpdate();
-}
-
-function convertOffsetCoefInput(input_offset){
-
-    var output_offset = 0;
-    output_offset = input_offset/300*2;
-    return output_offset;
-}
-
 function triggerGraphUpdate(){
 
     if (state == 1){
@@ -1213,14 +1199,6 @@ function showConstraintInput(){
 
 }
 
-function showRoutesDiv(){
-    document.getElementById("routesContainer").style.display = "inline-block";
-}
-
-function hideRoutesDiv(){
-    document.getElementById("routesContainer").style.display = "none";
-}
-
 function setTypeNear(){
 	
     document.getElementById("btn-near").className = "btn btn-warning";
@@ -1228,6 +1206,8 @@ function setTypeNear(){
     document.getElementById("btn-betweenplus").className = "btn btn-default";
     document.getElementById("waypointInput").style.display = 'none';
     document.getElementById("destinationInput").style.display = 'none';
+    document.getElementById("angleDisplayContainer").style.display = 'table-row';
+    document.getElementById("angleSliderContainer").style.display = 'table-row';
     document.getElementById("offsetDisplayContainer").style.display = 'none';
     document.getElementById("offsetSliderContainer").style.display = 'none';
     document.getElementById("timeConstraintTitle").innerHTML= "WITHIN ";
@@ -1246,6 +1226,8 @@ function setTypeBetween(){
     document.getElementById("btn-betweenplus").className = "btn btn-default";
     document.getElementById("waypointInput").style.display = 'none';
     document.getElementById("destinationInput").style.display = 'table-cell';
+    document.getElementById("angleDisplayContainer").style.display = 'none';
+    document.getElementById("angleSliderContainer").style.display = 'none';
     document.getElementById("offsetDisplayContainer").style.display = 'none';
     document.getElementById("offsetSliderContainer").style.display = 'none';
     document.getElementById("timeConstraintTitle").innerHTML= "MAX. DELTA ";
@@ -1264,6 +1246,8 @@ function setTypeBetweenPlus(){
     document.getElementById("btn-betweenplus").className = "btn btn-warning";
     document.getElementById("waypointInput").style.display = 'table-cell';
     document.getElementById("destinationInput").style.display = 'table-cell';
+    document.getElementById("angleDisplayContainer").style.display = 'none';
+    document.getElementById("angleSliderContainer").style.display = 'none';
     document.getElementById("offsetDisplayContainer").style.display = 'table-row';
     document.getElementById("offsetSliderContainer").style.display = 'table-row';
     document.getElementById("timeConstraintTitle").innerHTML= "MAX. DELTA ";
@@ -1273,6 +1257,57 @@ function setTypeBetweenPlus(){
         queryType = 3;    
         refresh();
     }
+}
+
+function showDuration(duration) {
+
+    durationLimit = convertDurationInput(duration);
+    document.getElementById("timeConstraintDisplay").innerHTML = durationLimit;
+    triggerGraphUpdate();
+}
+
+function convertDurationInput(input_duration){
+
+    var output_duration = 0;
+    input_duration /= 300;
+    output_duration = (300-1)*Math.pow(input_duration, 2.12372) + 1;
+    return Math.round(output_duration);
+}
+
+function showDistance(distance) {
+
+    distanceLimit = convertDistanceInput(distance);
+    document.getElementById("distanceConstraintDisplay").innerHTML = distanceLimit;
+    triggerGraphUpdate();
+}
+
+function convertDistanceInput(input_distance){
+
+    var output_distance = 0;
+    input_distance /= 300;
+    output_distance = (300-1)*Math.pow(input_distance, 2.12372) + 1;
+    return Math.round(output_distance);
+}
+
+function showOffsetCoef(offset_coef) {
+
+    offsetCoef = convertOffsetCoefInput(offset_coef);
+    document.getElementById("offsetCoefDisplay").innerHTML = offsetCoef.toFixed(2);
+    triggerGraphUpdate();
+}
+
+function convertOffsetCoefInput(input_offset){
+
+    var output_offset = 0;
+    output_offset = input_offset/300*2;
+    return output_offset;
+}
+
+function showAngle(angle) {
+
+	northAngleLimit = angle;
+    document.getElementById("angleConstraintDisplay").innerHTML = angle;
+    triggerGraphUpdate();
 }
 
 function setModeDriving(){
@@ -1391,7 +1426,18 @@ function setModeWalking(){
 
                 <div style="display:table-row;">
                     <input id="distanceConstraint" type="range" style="width:100%" oninput="showDistance(this.value)" min="1" max="300" value="100">
-                </div>    
+                </div>
+
+
+                <div id="angleDisplayContainer" style="display:table-row">
+                    <span id="angleConstraintTitle" class="number-title">WITHIN </span>
+                    <span class="number-display" id="angleConstraintDisplay">90</span>
+                    <span class="number-title"> DEGREE NORTH</span>
+                </div>
+
+                <div id="angleSliderContainer" style="display:table-row;">
+                    <input id="angleConstraint" type="range" style="width:100%" oninput="showAngle(this.value)" min="1" max="180" value="90">
+                </div>      
             </div>
         </div> 
     </div>

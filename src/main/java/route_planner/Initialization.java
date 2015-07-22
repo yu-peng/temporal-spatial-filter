@@ -28,10 +28,13 @@ public class Initialization implements ServletContextListener{
 	
 	public void contextInitialized(ServletContextEvent arg0) {
 
-		ServletContext context = arg0.getServletContext();
-		hopperMapPrefix = context.getRealPath("/WEB-INF/resources/") + "/maps/";
-		hopperOSMFile = context.getRealPath("/WEB-INF/resources/") + "/maps/";
+//		ServletContext context = arg0.getServletContext();
+		hopperMapPrefix = this.getClass().getResource("/").getPath() + "/maps/";
+		hopperOSMFile = this.getClass().getResource("/").getPath() + "/maps/";
 		
+//		System.out.println("hopperMapPrefix: " + hopperMapPrefix);
+//		System.out.println("hopperOSMFile: " + hopperOSMFile);
+
 		loadCaliforniaMap();
 //		loadMichiganMap();		
 
